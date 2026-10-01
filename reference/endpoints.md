@@ -218,7 +218,7 @@ All errors follow the `ErrorEnvelope` shape:
 
 ## `POST /v1/trust`
 
-Curated wallet trust profile: 45 base checks across 26 chains in 5 dimensions, up to 50 checks across 28 chains in 9 dimensions with the optional wallets. Returns a signed profile with per-check booleans and an overall summary.
+Curated wallet trust profile: 145 base checks across 27 chains in 9 dimensions, up to 166 checks across 29 chains in 13 dimensions with the optional wallets. Every check is a presence check (held or not held, never a balance). Returns a signed profile with per-check booleans and an overall summary.
 
 ### Request
 
@@ -241,8 +241,8 @@ X-API-Key: insr_live_...
 ```
 
 - `wallet` is required (EVM).
-- `solanaWallet`, `xrplWallet`, `bitcoinWallet`, `tronWallet`, `stellarWallet`, `suiWallet` are all optional; each unlocks additional checks.
-- Optional `proof: "merkle"` costs 6 credits instead of 3.
+- `solanaWallet`, `xrplWallet`, `bitcoinWallet`, `tronWallet` are optional; each switches on its own dimension. `stellarWallet` and `suiWallet` are optional and add no dimension; they let the Stellar and Sui rows inside the base dimensions evaluate.
+- Optional `proof: "merkle"` costs 6 credits instead of 3: EIP-1186 storage proofs on EVM token rows. Rows whose balance is computed rather than stored (Aave aTokens, BUIDL) are declined at once with a reason, as are NFT, name and non-EVM rows; the premium is refunded whenever no proof is delivered.
 
 ### Response shape
 
@@ -253,28 +253,33 @@ X-API-Key: insr_live_...
     "trust": {
       "id": "TRST-A1B2C",
       "wallet": "0xd8dA...",
-      "conditionSetVersion": "v1",
+      "conditionSetVersion": "2026-10",
       "dimensions": {
         "stablecoins": {
           "checks": [ { "label": "...", "met": true, "chainId": 1, "..." } ],
           "passCount": 3,
-          "failCount": 24,
-          "total": 27
+          "failCount": 49,
+          "notEvaluatedCount": 0,
+          "total": 52
         },
-        "governance": { "checks": [ ... ], "passCount": 0, "failCount": 4, "total": 4 },
-        "nfts":       { "checks": [ ... ], "passCount": 0, "failCount": 3, "total": 3 },
-        "staking":    { "checks": [ ... ], "passCount": 0, "failCount": 3, "total": 3 },
+        "governance": { "checks": [ ... ], "passCount": 0, "failCount": 8, "notEvaluatedCount": 0, "total": 8 },
+        "nfts":       { "checks": [ ... ], "passCount": 0, "failCount": 3, "notEvaluatedCount": 0, "total": 3 },
+        "staking":    { "checks": [ ... ], "passCount": 0, "failCount": 5, "notEvaluatedCount": 0, "total": 5 },
         "institutional_stablecoins": { "checks": [ ... ], "passCount": 0, "failCount": 2, "notEvaluatedCount": 6, "total": 8 },
+        "tokenized_treasuries": { "checks": [ ... ], "passCount": 0, "failCount": 15, "notEvaluatedCount": 1, "total": 16 },
+        "stablecoin_deposits":  { "checks": [ ... ], "passCount": 0, "failCount": 39, "notEvaluatedCount": 0, "total": 39 },
+        "wrapped_bitcoin":      { "checks": [ ... ], "passCount": 0, "failCount": 12, "notEvaluatedCount": 0, "total": 12 },
+        "names":                { "checks": [ ... ], "passCount": 0, "failCount": 2, "notEvaluatedCount": 0, "total": 2 },
         "solana":     { "checks": [ ... ], "...": "only present when solanaWallet provided" },
         "xrpl":       { "checks": [ ... ], "...": "only present when xrplWallet provided" }
       },
       "summary": {
-        "totalChecks": 45,
+        "totalChecks": 145,
         "totalPassed": 3,
-        "totalFailed": 36,
-        "totalNotEvaluated": 6,
+        "totalFailed": 135,
+        "totalNotEvaluated": 7,
         "dimensionsWithActivity": 1,
-        "dimensionsChecked": 5
+        "dimensionsChecked": 9
       },
       "profiledAt": "2026-04-13T12:00:00.000Z",
       "expiresAt": "2026-04-13T12:30:00.000Z"
@@ -293,17 +298,21 @@ X-API-Key: insr_live_...
 
 ### Dimensions
 
-- **stablecoins**: USDC and USDT across EVM chains (27 checks)
-- **governance**: UNI and AAVE on Ethereum, ARB on Arbitrum, OP on Optimism (4 checks)
+- **stablecoins**: USDC, USDT, OUSD, PYUSD, USDG, USD1, RLUSD, USDS, DAI and EURC across 23 EVM chains (52 checks)
+- **governance**: UNI, AAVE, ENS, LDO, SKY and COMP on Ethereum, ARB on Arbitrum, OP on Optimism (8 checks)
 - **nfts**: BAYC, Pudgy Penguins and Wrapped CryptoPunks on Ethereum (3 checks)
-- **staking**: stETH, rETH and cbETH on Ethereum (3 checks)
+- **staking**: stETH, rETH, cbETH, wstETH and weETH on Ethereum (5 checks)
 - **institutional_stablecoins**: EURCV, USDCV, USDC and BENJI across Ethereum, Solana, XRPL, Stellar and Sui (8 checks, always present; the Solana, XRPL, Stellar and Sui entries carry `evaluated: false` unless the matching wallet is supplied)
-- **solana** — Solana USDC (only when `solanaWallet` provided)
-- **xrpl** — XRPL stablecoins (only when `xrplWallet` provided)
-- **bitcoin** — native BTC balance (only when `bitcoinWallet` provided)
-- **tron**: Tron USDT (only when `tronWallet` provided)
+- **tokenized_treasuries**: BUIDL, USYC, OUSG, USTB and USDY (16 checks, always present; the USDY on Sui row carries `evaluated: false` unless `suiWallet` is supplied)
+- **stablecoin_deposits**: Aave v3 aUSDC/aUSDT, sUSDS, sDAI and the listed Morpho USDC vaults (39 checks)
+- **wrapped_bitcoin**: cbBTC, WBTC and tBTC (12 checks)
+- **names**: ENS .eth names on Ethereum, Basenames on Base (2 checks)
+- **solana**: USDC, EURC, OUSD, PYUSD, USD1, USDG, USDS, BUIDL, USDY, WBTC, cbBTC, tBTC, JitoSOL, mSOL on Solana (14 checks, only when `solanaWallet` provided)
+- **xrpl**: RLUSD, USDC, OUSG on XRPL (3 checks, only when `xrplWallet` provided)
+- **bitcoin**: native BTC (1 check, only when `bitcoinWallet` provided)
+- **tron**: USDT, USD1, WBTC on Tron (3 checks, only when `tronWallet` provided)
 
-Base profile is 45 checks across 26 chains in 5 dimensions. With optional Solana + XRPL + Bitcoin + Tron wallets it reaches up to 50 checks across 28 chains in 9 dimensions.
+Base profile is 145 checks across 27 chains in 9 dimensions. With optional Solana + XRPL + Bitcoin + Tron wallets it reaches up to 166 checks across 29 chains in 13 dimensions. `conditionSetVersion` is a dated set id (currently `"2026-10"`), the same on every key version, signed with the profile; it names the check list that was run. Readers log it and must not reject on it.
 
 ### Credits
 

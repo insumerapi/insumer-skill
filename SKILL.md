@@ -59,7 +59,7 @@ Pick this when the developer says: "verify this wallet owns X," "gate by USDC ba
 
 ### `POST /v1/trust` — curated profile
 
-Use when the developer wants a pre-built snapshot instead of specifying conditions. Runs 45 base checks across 5 dimensions (stablecoins, governance, NFTs, staking, institutional stablecoins) on 26 chains, plus optional Solana, XRPL, Bitcoin, and Tron wallets (up to 50 checks across 9 dimensions). 3 credits standard, 6 with Merkle.
+Use when the developer wants a pre-built snapshot instead of specifying conditions. Runs 145 base checks across 9 dimensions (stablecoins, governance, NFTs, staking, institutional stablecoins, tokenized treasuries, stablecoin deposits, wrapped bitcoin, names) on 27 chains, plus optional Solana, XRPL, Bitcoin, and Tron wallets (up to 166 checks across 29 chains in 13 dimensions; Stellar and Sui wallets switch on rows inside the base dimensions). Every check is a presence check. The signed `conditionSetVersion` (currently `2026-10`) names the check list run; log it, never reject on it. 3 credits standard, 6 with Merkle.
 
 Pick this when the developer says: "give me a trust profile for this wallet," "show me what this wallet holds across chains," "pre-transaction trust check," "should I transact with this wallet."
 
