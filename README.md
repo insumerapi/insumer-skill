@@ -117,7 +117,7 @@ The 403 response includes `attestationId`, `blockNumber`, and `blockTimestamp` �
 - [`insumer-agent-skills`](https://github.com/insumerapi/insumer-agent-skills) — same wallet auth primitive packaged for the [agentskills.io](https://agentskills.io) open standard. Installable in Cursor, Copilot, Codex, Gemini CLI, JetBrains Junie, Block Goose, Sourcegraph Amp, Letta, Roo Code, and 25+ other agentskills-compatible IDEs via `npx skills add insumerapi/insumer-agent-skills`. Use this if you want the same wallet-auth behavior in any agent that isn't Claude Code.
 - [`mcp-server-insumer`](https://github.com/insumerapi/mcp-server-insumer) — MCP server for runtime agent access to the same API. Install this if you want an agent to *call* InsumerAPI at runtime; install `insumer-skill` if you want Claude Code to help you *write* code that calls it.
 - [`eliza-plugin-insumer`](https://www.npmjs.com/package/@insumermodel/plugin-eliza) — ElizaOS plugin for the same API.
-- [`insumer-verify`](https://github.com/insumerapi/insumer-verify) — standalone offline verification library for Node.
+- [`insumer-verify`](https://github.com/insumerapi/insumer-verify) — standalone offline verification library, on [npm](https://www.npmjs.com/package/insumer-verify) for Node and on [PyPI](https://pypi.org/project/insumer-verify/) for Python under the same name; same checks, same 27 published test vectors.
 
 ## See also
 
