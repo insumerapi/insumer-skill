@@ -69,9 +69,9 @@ X-API-Key: insr_live_...
 - `decimals` is optional. Leave it out: the token's own decimals are always read from the chain. If sent it is only a cross-check, and a value that differs from the token's own decimals is rejected with a `400`.
 - For native tokens (ETH, SOL, XRP, BTC, TRX, XLM), set `contractAddress: "native"`. `"native"` is for `token_balance` and `ratio_to_amount` only.
 - On Sui, `contractAddress` is always a coin type (`address::module::Name`). Native SUI is `"0x2::sui::SUI"`; the string `"native"` is a `400` there.
-- For XRPL trust line tokens, add `currency: "RLUSD"` (or similar currency code).
+- For XRPL trust line tokens, add `currency: "RLUSD"` (or similar currency code). Currency codes are case-sensitive and matched exactly as issued: send the code exactly as the issuer created it (`USD` and `usd` are different currencies). XRP is the native coin, not an issued currency, so it is not accepted as the `currency` of a trust line condition: use `contractAddress: "native"` for XRP.
 
-**NFT ownership (ERC-721, ERC-1155, XRPL NFToken)**:
+**NFT ownership (ERC-721 style on EVM, XRPL NFToken)**:
 ```json
 {
   "type": "nft_ownership",
@@ -201,7 +201,7 @@ Verify the JWT with any standard library pointed at `https://insumermodel.com/.w
 | `400` | Validation error (malformed wallet or contract address, unknown chain, missing required field, a `decimals` value that differs from the token's own) |
 | `401` | Missing or invalid `X-API-Key` |
 | `402` | Insufficient credits — top up or upgrade tier |
-| `503` | Upstream data source unavailable. No attestation signed, no credits charged. Retry after a short delay. |
+| `503` | Error code `rpc_failure`: a read did not complete. No attestation signed, no credits charged. It is never a `false`. Retry after a short delay. |
 
 All errors follow the `ErrorEnvelope` shape:
 ```json
