@@ -29,7 +29,7 @@ Add **wallet auth** to a project — the same way you'd add OAuth, but for what 
 
 ## What this primitive is
 
-- **Category**: condition-based access. Send a wallet and a condition (token balance, NFT ownership, delegated authority, on-chain attestation), get back a cryptographically signed yes or no.
+- **Category**: condition-based access. Send a wallet and a condition (token balance, NFT ownership, delegated authority, on-chain attestation, account code state), get back a cryptographically signed yes or no.
 - **Primitive**: read → evaluate → sign. The API reads blockchain state, evaluates the condition, and signs the result with ES256 (ECDSA P-256). The signed boolean is portable — any downstream service can verify it against the public JWKS without calling the API back.
 - **Coverage**: 37 chains. 31 EVM chains (27 with optional Merkle storage proofs), plus Solana, XRPL, Bitcoin, Tron, Stellar, and Sui. NFT ownership on 33 of the 37 (EVM + Solana + XRPL); Bitcoin, Tron, Stellar and Sui are token-balance only.
 - **What you return to the caller**: the signed boolean — never the raw balance. Standard mode is boolean-not-balance by construction; Merkle mode is opt-in and costs double because it reveals the balance.
@@ -59,7 +59,7 @@ Pick this when the developer says: "verify this wallet owns X," "gate by USDC ba
 
 ### `POST /v1/trust` — curated profile
 
-Use when the developer wants a pre-built snapshot instead of specifying conditions. Runs 145 base checks across 9 dimensions (stablecoins, governance, NFTs, staking, institutional stablecoins, tokenized treasuries, stablecoin deposits, wrapped bitcoin, names) on 27 chains, plus optional Solana, XRPL, Bitcoin, and Tron wallets (up to 166 checks across 29 chains in 13 dimensions; Stellar and Sui wallets switch on rows inside the base dimensions). Every check is a presence check. The signed `conditionSetVersion` (currently `2026-10`) names the check list run; log it, never reject on it. 3 credits standard, 6 with Merkle.
+Use when the developer wants a pre-built snapshot instead of specifying conditions. Runs 155 base checks across 10 dimensions (stablecoins, governance, NFTs, staking, institutional stablecoins, tokenized treasuries, stablecoin deposits, wrapped bitcoin, names, account) on 27 chains, plus optional Solana, XRPL, Bitcoin, and Tron wallets (up to 176 checks across 29 chains in 14 dimensions; Stellar and Sui wallets switch on rows inside the base dimensions). Every check is a presence check; the `account` dimension reads the wallet's own code state (contract code or EIP-7702 delegation) on five chains. The dimensions come back in a fixed order (the ten base dimensions, then any of solana, xrpl, bitcoin, tron switched on). The signed `conditionSetVersion` (currently `2026-10-08`) names the check list run; log it, never reject on it. 3 credits standard, 6 with Merkle.
 
 Pick this when the developer says: "give me a trust profile for this wallet," "show me what this wallet holds across chains," "pre-transaction trust check," "should I transact with this wallet."
 

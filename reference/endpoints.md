@@ -47,9 +47,9 @@ X-API-Key: insr_live_...
 | Flag | Value | Effect |
 |---|---|---|
 | `format` | `"jwt"` | Adds a ready-to-verify ES256 JWT to the response (no extra credit cost) |
-| `proof` | `"merkle"` | Adds EIP-1186 Merkle storage proofs for `token_balance` conditions on 27 of 31 EVM chains. Not available on ZKsync Era (324), Sei (1329), Viction (88) or XDC Network (50), nor on any non-EVM chain. Costs 2 credits instead of 1. Note: Merkle mode reveals the raw balance, standard mode never does. |
+| `proof` | `"merkle"` | Adds EIP-1186 Merkle proofs on 27 of 31 EVM chains: storage proofs for `token_balance` conditions, account proofs (`subject: "account_code"`, with `codeHash` as the proven value) for `account_code` conditions, revocation-slot proofs for `erc7710_delegation`. Not available on ZKsync Era (324), Sei (1329), Viction (88) or XDC Network (50), nor on any non-EVM chain. Costs 2 credits instead of 1. Note: Merkle mode reveals the raw balance, standard mode never does. |
 
-**Condition types**: `token_balance`, `nft_ownership` (33 of 37 chains: EVM + Solana + XRPL), `eas_attestation` (Ethereum, Optimism, Polygon, Base, Arbitrum), `farcaster_id`, `evm_view_call` (single-address-argument view function returning bool; needs `selector`, EVM chains only), `ratio_to_amount`, `ratio_to_supply`, `erc8004_agent` (Base; needs `agentId`), and `erc7710_delegation` (Base; needs `delegationManager`, `expectedDelegator`, `delegation`; max 3 per call, 5-minute attestation expiry).
+**Condition types**: `token_balance`, `nft_ownership` (33 of 37 chains: EVM + Solana + XRPL), `eas_attestation` (Ethereum, Optimism, Polygon, Base, Arbitrum), `farcaster_id`, `evm_view_call` (single-address-argument view function returning bool; needs `selector`, EVM chains only), `ratio_to_amount`, `ratio_to_supply`, `erc8004_agent` (Base; needs `agentId`), `erc7710_delegation` (Base; needs `delegationManager`, `expectedDelegator`, `delegation`; max 3 per call, 5-minute attestation expiry), and `account_code` (EVM chains only; needs `expect`: `"none"` for a plain key account with no code, `"eip7702"` for an EIP-7702 delegation designator, `"contract"` for any other code; optional `delegate`, only with `"eip7702"`, met only when the designator points at that address; a non-EVM `chainId` or a `delegate` with another `expect` is a `400`. The result is the boolean `met`; the code and the delegation target are never returned. Signed `evaluatedCondition`: `{"type":"account_code","chainId":8453,"expect":"eip7702","operator":"code_state"}` plus `delegate`, lowercase, when supplied. Real example: wallet `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` with `{"type":"account_code","chainId":8453,"expect":"eip7702"}` returns `met: true` and `conditionHash` `0x6c5752bfbfcfd6ba36c9cda6c74df567f0e0414da6b7a3176061ba734aeadc46`). Ten types in all.
 
 **Max conditions per call**: 10.
 
@@ -102,6 +102,20 @@ X-API-Key: insr_live_...
   "label": "Coinbase Verified Account"
 }
 ```
+
+**Account code state (EVM only)**:
+```json
+{
+  "type": "account_code",
+  "chainId": 8453,
+  "expect": "eip7702",
+  "label": "EIP-7702 delegation on Base"
+}
+```
+- `expect` is required: `"none"` (no code, a plain key account), `"eip7702"` (the EIP-7702 delegation designator), or `"contract"` (any other code). The three states are exclusive on a chain.
+- `delegate` (optional, an EVM address) is accepted only with `expect: "eip7702"` and is met only when the designator points at it. It is echoed, lowercase, inside the signed `evaluatedCondition`.
+- The wallet above (`0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`) returns `met: true` for this condition; it carries an EIP-7702 delegation designator on Base, Ethereum and Optimism.
+- In proof mode the result carries an EIP-1186 account proof, `subject: "account_code"`, with `blockNumber`, `nonce`, `balance`, `storageHash`, `codeHash`, `accountProof`. `codeHash` is the proven value: keccak256 of empty code (`0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470`) means no code; keccak256 of `0xef0100` followed by the 20-byte target means an EIP-7702 delegation to that target (checkable only with the `delegate` the verifier supplies); anything else means contract code. An account absent from the state trie may report all zeros, which also means no code. Proof subjects are three: `account_balance`, `account_code`, `delegation_revocation`, plus the subject-less ERC-20 slot proof.
 
 ### Response (live capture, 2026-04-13 — a v1 key)
 
@@ -218,7 +232,7 @@ All errors follow the `ErrorEnvelope` shape:
 
 ## `POST /v1/trust`
 
-Curated wallet trust profile: 145 base checks across 27 chains in 9 dimensions, up to 166 checks across 29 chains in 13 dimensions with the optional wallets. Every check is a presence check (held or not held, never a balance). Returns a signed profile with per-check booleans and an overall summary.
+Curated wallet trust profile: 155 base checks across 27 chains in 10 dimensions, up to 176 checks across 29 chains in 14 dimensions with the optional wallets. Every check is a presence check (held or not held, never a balance; present or not present for the `account` dimension). Returns a signed profile with per-check booleans and an overall summary.
 
 ### Request
 
@@ -242,23 +256,25 @@ X-API-Key: insr_live_...
 
 - `wallet` is required (EVM).
 - `solanaWallet`, `xrplWallet`, `bitcoinWallet`, `tronWallet` are optional; each switches on its own dimension. `stellarWallet` and `suiWallet` are optional and add no dimension; they let the Stellar and Sui rows inside the base dimensions evaluate.
-- Optional `proof: "merkle"` costs 6 credits instead of 3: EIP-1186 storage proofs on EVM token rows. Rows whose balance is computed rather than stored (Aave aTokens, BUIDL) are declined at once with a reason, as are NFT, name and non-EVM rows; the premium is refunded whenever no proof is delivered.
+- Optional `proof: "merkle"` costs 6 credits instead of 3: EIP-1186 storage proofs on EVM token rows. Rows whose balance is computed rather than stored (Aave aTokens, BUIDL) are declined at once with a reason, as are NFT, name and non-EVM rows; `account` rows carry `proof.available: false` with a reason pointing at `/v1/attest`; the premium is refunded whenever no proof is delivered.
 
 ### Response shape
+
+Abbreviated; the ids and counts are from a real profile of `0x1601843c5E9bC251A3272907010AFa41Fa18347E`, a contract on all five `account` chains:
 
 ```json
 {
   "ok": true,
   "data": {
     "trust": {
-      "id": "TRST-A1B2C",
-      "wallet": "0xd8dA...",
-      "conditionSetVersion": "2026-10",
+      "id": "TRST-81224",
+      "wallet": "0x1601843c5E9bC251A3272907010AFa41Fa18347E",
+      "conditionSetVersion": "2026-10-08",
       "dimensions": {
         "stablecoins": {
           "checks": [ { "label": "...", "met": true, "chainId": 1, "..." } ],
-          "passCount": 3,
-          "failCount": 49,
+          "passCount": 6,
+          "failCount": 46,
           "notEvaluatedCount": 0,
           "total": 52
         },
@@ -267,31 +283,41 @@ X-API-Key: insr_live_...
         "staking":    { "checks": [ ... ], "passCount": 0, "failCount": 5, "notEvaluatedCount": 0, "total": 5 },
         "institutional_stablecoins": { "checks": [ ... ], "passCount": 0, "failCount": 2, "notEvaluatedCount": 6, "total": 8 },
         "tokenized_treasuries": { "checks": [ ... ], "passCount": 0, "failCount": 15, "notEvaluatedCount": 1, "total": 16 },
-        "stablecoin_deposits":  { "checks": [ ... ], "passCount": 0, "failCount": 39, "notEvaluatedCount": 0, "total": 39 },
+        "stablecoin_deposits":  { "checks": [ ... ], "passCount": 5, "failCount": 34, "notEvaluatedCount": 0, "total": 39 },
         "wrapped_bitcoin":      { "checks": [ ... ], "passCount": 0, "failCount": 12, "notEvaluatedCount": 0, "total": 12 },
         "names":                { "checks": [ ... ], "passCount": 0, "failCount": 2, "notEvaluatedCount": 0, "total": 2 },
+        "account": {
+          "checks": [
+            { "label": "Contract code on Ethereum", "chainId": 1, "met": true, "evaluatedCondition": { "type": "account_code", "chainId": 1, "expect": "contract", "operator": "code_state" }, "conditionHash": "0xfd7b6aa42eb012184fa54d9d5d99c6ab18481e0ce33ec0ec0e9d28d37b54ccbc", "blockNumber": "0x18eea5a", "blockTimestamp": "2026-10-07T21:52:59.000Z" },
+            { "label": "EIP-7702 delegation on Ethereum", "chainId": 1, "met": false, "evaluatedCondition": { "type": "account_code", "chainId": 1, "expect": "eip7702", "operator": "code_state" }, "conditionHash": "0xdef6fadcef95f59f4621fa2bf788e6be0ffc0492dba22038999b8cd757adf18b", "blockNumber": "0x18eea5a", "blockTimestamp": "2026-10-07T21:52:59.000Z" },
+            "..."
+          ],
+          "passCount": 5, "failCount": 5, "notEvaluatedCount": 0, "total": 10
+        },
         "solana":     { "checks": [ ... ], "...": "only present when solanaWallet provided" },
         "xrpl":       { "checks": [ ... ], "...": "only present when xrplWallet provided" }
       },
       "summary": {
-        "totalChecks": 145,
-        "totalPassed": 3,
-        "totalFailed": 135,
+        "totalChecks": 155,
+        "totalPassed": 16,
+        "totalFailed": 132,
         "totalNotEvaluated": 7,
-        "dimensionsWithActivity": 1,
-        "dimensionsChecked": 9
+        "dimensionsWithActivity": 3,
+        "dimensionsChecked": 10
       },
-      "profiledAt": "2026-04-13T12:00:00.000Z",
-      "expiresAt": "2026-04-13T12:30:00.000Z"
+      "profiledAt": "2026-10-07T21:53:04.795Z",
+      "expiresAt": "2026-10-07T22:23:04.795Z"
     },
     "sig": "base64 P1363 signature over trust object",
-    "kid": "insumer-trust-v2"
+    "kid": "insumer-trust-v2",
+    "pqSig": "base64 ML-DSA-65 companion signature",
+    "pqKid": "insumer-trust-pq1"
   },
   "meta": {
-    "creditsRemaining": 97,
+    "creditsRemaining": 850,
     "creditsCharged": 3,
     "version": "1.0",
-    "timestamp": "2026-04-13T12:00:00.000Z"
+    "timestamp": "2026-10-07T21:53:05.000Z"
   }
 }
 ```
@@ -307,12 +333,13 @@ X-API-Key: insr_live_...
 - **stablecoin_deposits**: Aave v3 aUSDC/aUSDT, sUSDS, sDAI and the listed Morpho USDC vaults (39 checks)
 - **wrapped_bitcoin**: cbBTC, WBTC and tBTC (12 checks)
 - **names**: ENS .eth names on Ethereum, Basenames on Base (2 checks)
+- **account**: contract code or EIP-7702 delegation present on Ethereum, Base, Arbitrum, Optimism, Polygon (10 checks; two per chain, "Contract code on X" met when bytecode other than the delegation designator is at the wallet address, "EIP-7702 delegation on X" met when the designator is there; exclusive per chain, a plain key reads false on both; which contract is never named)
 - **solana**: USDC, EURC, OUSD, PYUSD, USD1, USDG, USDS, BUIDL, USDY, WBTC, cbBTC, tBTC, JitoSOL, mSOL on Solana (14 checks, only when `solanaWallet` provided)
 - **xrpl**: RLUSD, USDC, OUSG on XRPL (3 checks, only when `xrplWallet` provided)
 - **bitcoin**: native BTC (1 check, only when `bitcoinWallet` provided)
 - **tron**: USDT, USD1, WBTC on Tron (3 checks, only when `tronWallet` provided)
 
-Base profile is 145 checks across 27 chains in 9 dimensions. With optional Solana + XRPL + Bitcoin + Tron wallets it reaches up to 166 checks across 29 chains in 13 dimensions. `conditionSetVersion` is a dated set id (currently `"2026-10"`), the same on every key version, signed with the profile; it names the check list that was run. Readers log it and must not reject on it.
+Base profile is 155 checks across 27 chains in 10 dimensions. With optional Solana + XRPL + Bitcoin + Tron wallets it reaches up to 176 checks across 29 chains in 14 dimensions. The dimensions come back in a fixed order: the base dimensions as listed above (`stablecoins` through `names`, then `account`), then whichever of `solana`, `xrpl`, `bitcoin`, `tron` were switched on, in that order; the order is the same for every wallet in a batch. `conditionSetVersion` is a dated set id (currently `"2026-10-08"`), the same on every key version, signed with the profile; it names the check list that was run. Readers log it and must not reject on it.
 
 ### Credits
 
