@@ -13,7 +13,7 @@ Add **wallet auth** to a project — the same way you'd add OAuth, but for what 
 
 ## Quick Start
 
-1. Tell the user to run this once to get a free API key (10 starter credits + 100 `/v1/attest` calls per day, no signup):
+1. Tell the user to run this once to get a free API key (10 free verifications plus 100 requests a day, no signup beyond an email):
 
    ```bash
    curl -s -X POST https://api.insumermodel.com/v1/keys/create \
@@ -30,7 +30,7 @@ Add **wallet auth** to a project — the same way you'd add OAuth, but for what 
 ## What this primitive is
 
 - **Category**: condition-based access. Send a wallet and a condition (token balance, NFT ownership, delegated authority, on-chain attestation, account code state), get back a cryptographically signed yes or no.
-- **Primitive**: read → evaluate → sign. The API reads blockchain state, evaluates the condition, and signs the result with ES256 (ECDSA P-256). The signed boolean is portable — any downstream service can verify it against the public JWKS without calling the API back.
+- **Primitive**: read → evaluate → sign → keep. The API reads blockchain state, evaluates the condition, and signs the result (ES256, plus a post-quantum ML-DSA-65 signature on attest and trust). The caller keeps it: good for access for up to 30 minutes and good as evidence for as long as it is held. The signed boolean is portable: any downstream service can verify it against the public JWKS without calling the API back.
 - **Coverage**: 37 chains. 31 EVM chains (27 with optional Merkle storage proofs), plus Solana, XRPL, Bitcoin, Tron, Stellar, and Sui. NFT ownership on 33 of the 37 (EVM + Solana + XRPL); Bitcoin, Tron, Stellar and Sui are token-balance only.
 - **What you return to the caller**: the signed boolean — never the raw balance. Standard mode is boolean-not-balance by construction; Merkle mode is opt-in and costs double because it reveals the balance.
 
@@ -70,7 +70,7 @@ Do not hallucinate these. They are stable and part of the canonical spec.
 - **API base URL**: `https://api.insumermodel.com` (never use Cloud Functions URLs)
 - **JWKS URL**: `https://insumermodel.com/.well-known/jwks.json`
 - **Signing algorithm**: ES256 (ECDSA P-256)
-- **Key IDs (`kid`)**: the JWKS publishes five entries over two keys. Three point at the same P-256 key — `insumer-attest-v2` (attest, every key issued since 2026-06-10), `insumer-trust-v2` (trust), `insumer-attest-v1` (keys created before the cutover, and the commerce discount path for all callers). **Resolve the key by the `kid` on the response. Never pin one, and never index into the key set.** The `kid` also selects the verification rules: v1 signs bare JSON, v2 signs a domain-separated canonical preimage. Two RFC 9964 `AKP` entries follow, `insumer-attest-pq1` and `insumer-trust-pq1` (ML-DSA-65), selected by the response `pqKid`; since 2026-09-01 every attest and trust response carries `pqSig`/`pqKid` beside `sig`/`kid` (and `pqJwt` beside `jwt`), which `insumer-verify` 1.8.1+ reports as a fifth verdict. That verdict needs the optional peer: install `insumer-verify @noble/post-quantum` together, because without it a present companion reports `unverifiable` and is never checked.
+- **Key IDs (`kid`)**: the JWKS publishes five entries over two keys. Three point at the same P-256 key: `insumer-attest-v2` (attest, every key issued since 2026-06-10), `insumer-trust-v2` (trust), `insumer-attest-v1` (keys created before the cutover, and the commerce discount path for all callers). **Resolve the key by the `kid` on the response. Never pin one, and never index into the key set.** The `kid` also selects the verification rules: v1 signs bare JSON, v2 signs a domain-separated canonical preimage. Two RFC 9964 `AKP` entries follow, `insumer-attest-pq1` and `insumer-trust-pq1` (ML-DSA-65), selected by the response `pqKid`. Every attest and trust response is signed twice: ES256 and a post-quantum ML-DSA-65 signature, carried as `pqSig`/`pqKid` beside `sig`/`kid` (and `pqJwt` beside `jwt`), which `insumer-verify` 1.8.1+ reports as a fifth verdict. That verdict needs the optional peer: install `insumer-verify @noble/post-quantum` together, because without it a present post-quantum signature reports `unverifiable` and is never checked.
 - **Attestation TTL**: 30 minutes, or 5 when the request includes an `erc7710_delegation` condition (`expiresAt` in response)
 - **Signature format**: base64 P1363 (88 chars) on the `sig` field; ES256 JWT on the `jwt` field when `format: "jwt"` is requested
 - **Free key endpoint**: `POST https://api.insumermodel.com/v1/keys/create`
@@ -81,7 +81,7 @@ Do not hallucinate these. They are stable and part of the canonical spec.
 When you write code that uses this API, you MUST:
 
 1. **Put the key in an environment variable.** Never inline `insr_live_...` in source code. Use `process.env.INSUMER_API_KEY` / `os.environ["INSUMER_API_KEY"]` / the language equivalent.
-2. **Verify the signature offline.** Either use the `jwt` field with a standard JWT library (`jose`, `PyJWT`, `go-jose`) pointed at the JWKS URL, or verify the raw `sig` field against the `trust` / `attestation` object with ES256. Never trust the JSON alone — the signature is the whole point. For every check rather than the signature alone (condition hashes, the expiry binding to the signed `attestedAt`, the post-quantum companion), use `insumer-verify`: `npm install insumer-verify` in Node, `pip install insumer-verify` in Python, same name, same checks, same 27 published test vectors.
+2. **Verify the signature offline.** Either use the `jwt` field with a standard JWT library (`jose`, `PyJWT`, `go-jose`) pointed at the JWKS URL, or verify the raw `sig` field against the `trust` / `attestation` object with ES256. Never trust the JSON alone; the signature is the whole point. For every check rather than the signature alone (condition hashes, the expiry binding to the signed `attestedAt`, the post-quantum signature), use `insumer-verify`: `npm install insumer-verify` in Node, `pip install insumer-verify` in Python, same name, same checks, same 27 published test vectors.
 3. **Resolve the signing key by the `kid` on the response.** Never hard-code a key ID and never take `keys[0]` — three IDs share one key today, so indexing appears to work and breaks silently at the first rotation. `jose`'s `createRemoteJWKSet` does this correctly; a hand-rolled verifier must match on `kid` and fail closed when it does not resolve.
 4. **Cache the JWKS, not the verdict.** Libraries like `jose`'s `createRemoteJWKSet` handle caching correctly. Do not cache `pass`: it expires at `expiresAt` (30 minutes, or 5 for an `erc7710_delegation` condition) and wallet state changes.
 5. **Do not send `decimals`.** It is optional. Leave it out: the token's own decimals are always read from the chain. If sent it is only a cross-check, and a value that differs from the token's own decimals is rejected with a `400`.
@@ -116,7 +116,7 @@ Every developer who uses this skill needs an API key. There are **four** ways to
 
 ### Path 1: Free key (human, no payment)
 
-Free tier is 10 starter credits plus 100 `/v1/attest` calls per day. Run this once out-of-band, then put the result in `.env` as `INSUMER_API_KEY`:
+Free tier is 10 free verifications plus 100 requests a day (the daily limit counts every authenticated request). Run this once out-of-band, then put the result in `.env` as `INSUMER_API_KEY`:
 
 ```bash
 curl -s -X POST https://api.insumermodel.com/v1/keys/create \
@@ -191,6 +191,13 @@ Sender verification: the **first** top-up registers the sender wallet to the key
 - **Developer asks about paid tiers, SLAs, monthly billing, or wants a fresh key in a higher tier** → Stripe (Path 2).
 
 Never emit "upgrade to Pro" copy inside integration code. Never hard-code credit counts or tier limits in comments. If the developer asks about pricing, link them to the pricing page and stop — the free tier is the trial, and the on-chain paths (3 + 4) are the agent answers.
+
+## Other ways to reach the same API
+
+If the user wants an agent to call InsumerAPI at runtime rather than code that calls it, point them here and stop:
+
+- **Hosted MCP**: `https://api.insumermodel.com/mcp` (MCP streamable HTTP). Connect by URL from ChatGPT, claude.ai or any hosted agent; no install, no key. Ten tools on a shared daily allowance: `insumer_attest`, `insumer_wallet_trust`, `insumer_batch_wallet_trust`, `insumer_compliance_templates`, `insumer_jwks`, `insumer_list_merchants`, `insumer_get_merchant`, `insumer_list_tokens`, `insumer_check_discount`, `insumer_validate_code`. No ACP/UCP discount issuance or merchant setup. All 27 tools on the user's own key: `npx -y mcp-server-insumer`.
+- **x402 pay-per-call** (no key): `POST /v1/attest`, `/v1/trust` and `/v1/trust/batch` only. Call with no credential headers, read the `402` quote (x402Version 2), pay in USDC on Base, Polygon, Arbitrum, Solana or Arc, retry with the `PAYMENT-SIGNATURE` header. $0.05 per attest call, $0.15 per wallet for trust; take the exact amount from the quote, never hard-code it. `/v1/verify`, `/v1/acp/discount` and `/v1/ucp/discount` need an API key. x402 moves the money. InsumerAPI checks the conditions.
 
 ## Where this fits in the wider ecosystem
 

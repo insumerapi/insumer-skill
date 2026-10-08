@@ -30,7 +30,7 @@ Claude Code picks up any skill one level inside `~/.claude/skills/`, which is wh
 ## First use
 
 1. Install the skill (above).
-2. Generate a free API key — 10 starter credits + 100 `/v1/attest` calls per day, no signup:
+2. Generate a free API key: 10 free verifications plus 100 requests a day, no signup beyond an email:
 
    ```bash
    curl -s -X POST https://api.insumermodel.com/v1/keys/create \
@@ -45,19 +45,21 @@ Claude will use the skill to produce correct, signature-verifying code.
 
 ## The primitive
 
-InsumerAPI is a wallet auth primitive: read → evaluate → sign.
+InsumerAPI is a wallet auth primitive: read → evaluate → sign → keep.
 
 1. **Read**: the API reads blockchain state across 37 chains (31 EVM, 27 of them with Merkle proofs, plus Solana, XRPL, Bitcoin, Tron, Stellar, Sui).
 2. **Evaluate**: it evaluates your conditions (token balance threshold, NFT ownership, delegated authority, EAS attestation) against that state.
 3. **Sign**: it returns a boolean — pass / fail — signed with ES256 and wrapped in an ES256 JWT with a `kid` that any party can resolve through a public JWKS at `https://insumermodel.com/.well-known/jwks.json`.
+4. **Keep**: the signed result is good for access for up to 30 minutes and good as evidence for as long as you hold it, checkable offline against a saved copy of the public keys. InsumerAPI cannot reproduce it later, so the signed result is your record.
 
 The signed boolean is counterparty-portable. Agent A can hand it to Agent B, who can verify it against the JWKS without ever calling the API. There are no secrets to rotate, no identity broker, no static credentials.
 
 **Boolean, not balance**: standard mode returns only the pass/fail result. The wallet's actual holdings never leave the verification layer. Merkle mode is available for callers who need the raw balance for client-side proof reconstruction — it costs double and is opt-in.
 
-**Agents pay for their own access**: there are two crypto-native paths, both no-human-in-the-loop.
+**Agents pay for their own access**: there are three crypto-native paths, all no-human-in-the-loop.
 
 - **Cold start** (no key yet): the agent sends USDC, USDT, or BTC to the platform wallet and calls `POST /v1/keys/buy` with the transaction hash. **No email needed** — the sender wallet from the transaction becomes the key's identity. One key per sender wallet.
+- **Pay per call** (no key at all): `POST /v1/attest`, `/v1/trust` and `/v1/trust/batch` accept x402. See [Other ways to reach the same API](#other-ways-to-reach-the-same-api).
 - **Top-up** (existing key, low credits): the agent sends crypto and calls `POST /v1/credits/buy` with the transaction hash. The key keeps its identity, history, and integrations; credits just increment. Sender must match the wallet registered to the key.
 
 Platform wallets (publicly listed at [insumermodel.com/pricing](https://insumermodel.com/pricing/)):
@@ -118,6 +120,15 @@ The 403 response includes `attestationId`, `blockNumber`, and `blockTimestamp` �
 - [`mcp-server-insumer`](https://github.com/insumerapi/mcp-server-insumer) — MCP server for runtime agent access to the same API. Install this if you want an agent to *call* InsumerAPI at runtime; install `insumer-skill` if you want Claude Code to help you *write* code that calls it.
 - [`eliza-plugin-insumer`](https://www.npmjs.com/package/@insumermodel/plugin-eliza) — ElizaOS plugin for the same API.
 - [`insumer-verify`](https://github.com/insumerapi/insumer-verify) — standalone offline verification library, on [npm](https://www.npmjs.com/package/insumer-verify) for Node and on [PyPI](https://pypi.org/project/insumer-verify/) for Python under the same name; same checks, same 27 published test vectors.
+
+## Other ways to reach the same API
+
+This skill helps Claude Code write code against InsumerAPI. An agent can also call the same API directly:
+
+- **Hosted MCP**: `https://api.insumermodel.com/mcp` (MCP streamable HTTP). Connect by URL from ChatGPT, claude.ai or any hosted agent; no install, no key. Ten tools on a shared daily allowance: `insumer_attest`, `insumer_wallet_trust`, `insumer_batch_wallet_trust`, `insumer_compliance_templates`, `insumer_jwks`, `insumer_list_merchants`, `insumer_get_merchant`, `insumer_list_tokens`, `insumer_check_discount`, `insumer_validate_code`. It does not include ACP/UCP discount issuance or merchant setup. For all 27 tools on your own key: `npx -y mcp-server-insumer`.
+- **x402 pay-per-call**: `POST /v1/attest`, `/v1/trust` and `/v1/trust/batch` accept x402. Call with no credential headers, get `402 Payment Required` with a quote (x402Version 2), pay in USDC on Base, Polygon, Arbitrum, Solana or Arc, and retry with the `PAYMENT-SIGNATURE` header. $0.05 per attest call, $0.15 per wallet for trust; the quote carries the exact amount. The payer is charged only for a successful answer, and the payer sees the answer only after the payment settled. The discount endpoints (`/v1/verify`, `/v1/acp/discount`, `/v1/ucp/discount`) take an API key, not x402.
+
+x402 moves the money. InsumerAPI checks the conditions.
 
 ## See also
 

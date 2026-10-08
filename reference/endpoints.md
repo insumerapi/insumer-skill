@@ -202,7 +202,7 @@ Verify the JWT with any standard library pointed at `https://insumermodel.com/.w
 | `data.attestation.results[].blockNumber` | Hex block number (all 31 EVM chains; Solana uses `slot`, XRPL uses `ledgerIndex`). API returns 503 if the anchor can't be captured rather than signing a partial result. |
 | `data.attestation.results[].blockTimestamp` | ISO 8601 timestamp of the evaluation block |
 | `data.sig` | Base64 P1363 ES256 signature (88 chars). The preimage is selected by `data.kid`: `insumer-attest-v2` signs `"insumer.attestation.v2" + "\n" + canonical_json({v:2,id,pass,results,attestedAt})` (keys sorted recursively); `insumer-attest-v1` signs the bare `JSON.stringify({id,pass,results,attestedAt})`. `expiresAt` is outside the preimage. |
-| `data.pqSig` / `data.pqKid` | Post-quantum companion (ML-DSA-65, FIPS 204) over the post-quantum domain tag plus the same classical preimage; `pqKid` is `insumer-attest-pq1`, an RFC 9964 `AKP` entry in the same JWKS. Additive beside `sig`/`kid`. |
+| `data.pqSig` / `data.pqKid` | Post-quantum signature (ML-DSA-65, FIPS 204) over the post-quantum domain tag plus the same classical preimage; `pqKid` is `insumer-attest-pq1`, an RFC 9964 `AKP` entry in the same JWKS. Additive beside `sig`/`kid`. |
 | `data.kid` | Signing key ID — look up in JWKS |
 | `data.jwt` | Present only when `format: "jwt"` requested; ES256 JWT with claims listed above |
 | `meta.creditsRemaining` | Credit balance after this call |
@@ -310,7 +310,7 @@ Abbreviated; the ids and counts are from a real profile of `0x1601843c5E9bC251A3
     },
     "sig": "base64 P1363 signature over trust object",
     "kid": "insumer-trust-v2",
-    "pqSig": "base64 ML-DSA-65 companion signature",
+    "pqSig": "base64 ML-DSA-65 signature",
     "pqKid": "insumer-trust-pq1"
   },
   "meta": {
@@ -356,7 +356,7 @@ The JWKS contains an array of keys. **Match on the `kid` from the response you a
 publishes five entries over two keys: three IDs over the same P-256 key, `insumer-attest-v2` (attest),
 `insumer-trust-v2` (trust), `insumer-attest-v1` (pre-cutover keys, and the commerce discount path),
 followed by two RFC 9964 `AKP` entries, `insumer-attest-pq1` and `insumer-trust-pq1`, for the
-ML-DSA-65 companion key. Do not pin one and do not take `keys[0]` — the set holds keys of two
+ML-DSA-65 post-quantum key. Do not pin one and do not take `keys[0]`: the set holds keys of two
 types, and position is not a contract. Fail closed when a `kid` does not resolve.
 
 See `../examples/gate-express.ts` for a live-verified Node/TypeScript example using `jose`'s `createRemoteJWKSet`.
