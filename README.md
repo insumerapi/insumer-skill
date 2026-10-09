@@ -1,10 +1,10 @@
 # insumer-skill
 
-**Wallet auth for Claude Code.** Add condition-based access to any project — token balances, NFT ownership, on-chain eligibility, pre-transaction trust — in whatever language you're writing. One install, one free API key, signature-verifying code on the first try.
+**Wallet auth for Claude Code.** Add condition-based access to any project (token balances, NFT ownership, on-chain eligibility, pre-transaction trust) in whatever language you're writing. One install, one free API key, signature-verifying code on the first try.
 
 > OAuth proves who the user is. Wallet auth proves what the wallet holds. Boolean, not balance.
 
-> **Not in Claude Code?** This repo is Claude-Code-specific. For Cursor, GitHub Copilot, OpenAI Codex, Gemini CLI, JetBrains Junie, Sourcegraph Amp, Block Goose, and 25+ other IDEs supporting the [agentskills.io](https://agentskills.io) open standard, use [`insumer-agent-skills`](https://github.com/insumerapi/insumer-agent-skills) — same wallet auth primitive, multi-agent install via `npx skills add insumerapi/insumer-agent-skills`.
+> **Not in Claude Code?** This repo is Claude-Code-specific. For Cursor, GitHub Copilot, OpenAI Codex, Gemini CLI, JetBrains Junie, Sourcegraph Amp, Block Goose, and 25+ other IDEs supporting the [agentskills.io](https://agentskills.io) open standard, use [`insumer-agent-skills`](https://github.com/insumerapi/insumer-agent-skills): same wallet auth primitive, multi-agent install via `npx skills add insumerapi/insumer-agent-skills`.
 
 ## What this skill does
 
@@ -12,9 +12,9 @@ When you're working in Claude Code and you ask Claude to "add wallet verificatio
 
 Concretely, the skill contains:
 
-- `SKILL.md` — the instructions Claude reads when the skill activates
-- `reference/endpoints.md` — full request/response shapes for `/v1/attest` and `/v1/trust`, verified against a live call
-- `examples/gate-express.ts` — Express middleware that gates an endpoint by USDC balance on Base, with offline JWKS verification via `jose`
+- `SKILL.md`: the instructions Claude reads when the skill activates
+- `reference/endpoints.md`: full request/response shapes for `/v1/attest` and `/v1/trust`, verified against a live call
+- `examples/gate-express.ts`: Express middleware that gates an endpoint by USDC balance on Base, with offline JWKS verification via `jose`
 - `forbidden.md`: hard stops (things the skill must never emit: inline API keys, unverified responses, raw balance leaks, a guessed `decimals` value, Cloud Functions URLs)
 
 ## Install
@@ -49,16 +49,16 @@ InsumerAPI is a wallet auth primitive: read → evaluate → sign → keep.
 
 1. **Read**: the API reads blockchain state across 37 chains (31 EVM, 27 of them with Merkle proofs, plus Solana, XRPL, Bitcoin, Tron, Stellar, Sui).
 2. **Evaluate**: it evaluates your conditions (token balance threshold, NFT ownership, delegated authority, EAS attestation) against that state.
-3. **Sign**: it returns a boolean — pass / fail — signed with ES256 and wrapped in an ES256 JWT with a `kid` that any party can resolve through a public JWKS at `https://insumermodel.com/.well-known/jwks.json`.
+3. **Sign**: it returns a boolean (pass / fail) signed with ES256 and wrapped in an ES256 JWT with a `kid` that any party can resolve through a public JWKS at `https://insumermodel.com/.well-known/jwks.json`.
 4. **Keep**: the signed result is good for access for up to 30 minutes and good as evidence for as long as you hold it, checkable offline against a saved copy of the public keys. InsumerAPI cannot reproduce it later, so the signed result is your record.
 
 The signed boolean is counterparty-portable. Agent A can hand it to Agent B, who can verify it against the JWKS without ever calling the API. There are no secrets to rotate, no identity broker, no static credentials.
 
-**Boolean, not balance**: standard mode returns only the pass/fail result. The wallet's actual holdings never leave the verification layer. Merkle mode is available for callers who need the raw balance for client-side proof reconstruction — it costs double and is opt-in.
+**Boolean, not balance**: standard mode returns only the pass/fail result. The wallet's actual holdings never leave the verification layer. Merkle mode is available for callers who need the raw balance for client-side proof reconstruction; it costs double and is opt-in.
 
 **Agents pay for their own access**: there are three crypto-native paths, all no-human-in-the-loop.
 
-- **Cold start** (no key yet): the agent sends USDC, USDT, or BTC to the platform wallet and calls `POST /v1/keys/buy` with the transaction hash. **No email needed** — the sender wallet from the transaction becomes the key's identity. One key per sender wallet.
+- **Cold start** (no key yet): the agent sends USDC, USDT, or BTC to the platform wallet and calls `POST /v1/keys/buy` with the transaction hash. **No email needed**: the sender wallet from the transaction becomes the key's identity. One key per sender wallet.
 - **Pay per call** (no key at all): `POST /v1/attest`, `/v1/trust` and `/v1/trust/batch` accept x402. See [Other ways to reach the same API](#other-ways-to-reach-the-same-api).
 - **Top-up** (existing key, low credits): the agent sends crypto and calls `POST /v1/credits/buy` with the transaction hash. The key keeps its identity, history, and integrations; credits just increment. Sender must match the wallet registered to the key.
 
@@ -70,18 +70,18 @@ Platform wallets (publicly listed at [insumermodel.com/pricing](https://insumerm
 
 Volume discounts: $5–$99 → $0.04/call, $100–$499 → $0.03/call (25% off), $500+ → $0.02/call (50% off).
 
-The top-up path is the only continuous-identity upgrade — same key, history preserved. No Stripe, no human approval, no subscription renewal. This is what makes the "agent pays for its own access" loop real.
+The top-up path is the only continuous-identity upgrade: same key, history preserved. No Stripe, no human approval, no subscription renewal. This is what makes the "agent pays for its own access" loop real.
 
 ## Endpoints (the two the skill uses)
 
-- `POST /v1/attest` — 1–10 custom conditions, per-condition booleans, one overall `pass`. 1 credit.
+- `POST /v1/attest`: 1–10 custom conditions, per-condition booleans, one overall `pass`. 1 credit.
 - `POST /v1/trust`: curated profile of 155 base checks across 27 chains in 10 dimensions (stablecoins, governance, NFTs, staking, institutional stablecoins, tokenized treasuries, stablecoin deposits, wrapped bitcoin, names, account), up to 176 checks across 29 chains in 14 dimensions with the optional wallets. Every check is a presence check. 3 credits.
 
 Full shapes in `reference/endpoints.md`.
 
 ## Try the example end-to-end (2 minutes)
 
-The `examples/gate-express.ts` file is a working Express server. Verify the full flow — API call, JWKS fetch, offline signature verification, gating — in a scratch dir:
+The `examples/gate-express.ts` file is a working Express server. Verify the full flow (API call, JWKS fetch, offline signature verification, gating) in a scratch dir:
 
 ```bash
 mkdir /tmp/insumer-skill-try && cd /tmp/insumer-skill-try
@@ -112,14 +112,14 @@ curl -sS "http://localhost:3000/premium?wallet=0x28C6c06298d514Db089934071355E57
 curl -sS "http://localhost:3000/premium?wallet=notawallet"
 ```
 
-The 403 response includes `attestationId`, `blockNumber`, and `blockTimestamp` — enough for a downstream auditor to re-verify — but never the raw balance. That is boolean-not-balance in practice.
+The 403 response includes `attestationId`, `blockNumber`, and `blockTimestamp`, enough for a downstream auditor to re-verify, but never the raw balance. That is boolean-not-balance in practice.
 
 ## Related tools
 
-- [`insumer-agent-skills`](https://github.com/insumerapi/insumer-agent-skills) — same wallet auth primitive packaged for the [agentskills.io](https://agentskills.io) open standard. Installable in Cursor, Copilot, Codex, Gemini CLI, JetBrains Junie, Block Goose, Sourcegraph Amp, Letta, Roo Code, and 25+ other agentskills-compatible IDEs via `npx skills add insumerapi/insumer-agent-skills`. Use this if you want the same wallet-auth behavior in any agent that isn't Claude Code.
-- [`mcp-server-insumer`](https://github.com/insumerapi/mcp-server-insumer) — MCP server for runtime agent access to the same API. Install this if you want an agent to *call* InsumerAPI at runtime; install `insumer-skill` if you want Claude Code to help you *write* code that calls it.
-- [`eliza-plugin-insumer`](https://www.npmjs.com/package/@insumermodel/plugin-eliza) — ElizaOS plugin for the same API.
-- [`insumer-verify`](https://github.com/insumerapi/insumer-verify) — standalone offline verification library, on [npm](https://www.npmjs.com/package/insumer-verify) for Node and on [PyPI](https://pypi.org/project/insumer-verify/) for Python under the same name; same checks, same 27 published test vectors.
+- [`insumer-agent-skills`](https://github.com/insumerapi/insumer-agent-skills): same wallet auth primitive packaged for the [agentskills.io](https://agentskills.io) open standard. Installable in Cursor, Copilot, Codex, Gemini CLI, JetBrains Junie, Block Goose, Sourcegraph Amp, Letta, Roo Code, and 25+ other agentskills-compatible IDEs via `npx skills add insumerapi/insumer-agent-skills`. Use this if you want the same wallet-auth behavior in any agent that isn't Claude Code.
+- [`mcp-server-insumer`](https://github.com/insumerapi/mcp-server-insumer): MCP server for runtime agent access to the same API. Install this if you want an agent to *call* InsumerAPI at runtime; install `insumer-skill` if you want Claude Code to help you *write* code that calls it.
+- [`eliza-plugin-insumer`](https://www.npmjs.com/package/@insumermodel/plugin-eliza): ElizaOS plugin for the same API.
+- [`insumer-verify`](https://github.com/insumerapi/insumer-verify): standalone offline verification library, on [npm](https://www.npmjs.com/package/insumer-verify) for Node and on [PyPI](https://pypi.org/project/insumer-verify/) for Python under the same name; same checks, same 27 published test vectors.
 
 ## Other ways to reach the same API
 
