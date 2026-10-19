@@ -64,8 +64,10 @@ The signed boolean is counterparty-portable. Agent A can hand it to Agent B, who
 
 Platform wallets (publicly listed at [insumermodel.com/pricing](https://insumermodel.com/pricing/)):
 
-- **EVM**: `0xAd982CB19aCCa2923Df8F687C0614a7700255a23` (these seven EVM chains only: Ethereum, Base, Polygon, Arbitrum, Optimism, BNB Chain, Avalanche)
-- **Solana**: `6a1mLjefhvSJX1sEX8PTnionbE9DqoYjU6F6bNkT4Ydr`
+- **USDC on Ethereum, Base, Polygon, Arbitrum, Optimism or Avalanche**: `0xee432065474D2C852700f74e3fD81e2Bcc16a3D4`
+- **USDT on any of those seven EVM chains, and USDC or USDT on BNB Chain**: `0xAd982CB19aCCa2923Df8F687C0614a7700255a23` (no other EVM chain is a payment chain)
+- **USDC on Solana**: `8fyEGM5tRjMocKQWaVXyM2XvvnTxR3sWdrYtug2zeLX4`
+- **USDT on Solana**: `6a1mLjefhvSJX1sEX8PTnionbE9DqoYjU6F6bNkT4Ydr`
 - **Bitcoin**: `bc1qg7qnerdhlmdn899zemtez5tcx2a2snc0dt9dt0` (1 confirmation, market-rate USD conversion)
 
 Volume discounts: $5–$99 → $0.04/call, $100–$499 → $0.03/call (25% off), $500+ → $0.02/call (50% off).
