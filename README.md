@@ -58,17 +58,18 @@ The signed boolean is counterparty-portable. Agent A can hand it to Agent B, who
 
 **Agents pay for their own access**: there are three crypto-native paths, all no-human-in-the-loop.
 
-- **Cold start** (no key yet): the agent sends USDC, USDT, or BTC to the platform wallet and calls `POST /v1/keys/buy` with the transaction hash. **No email needed**: the sender wallet from the transaction becomes the key's identity. One key per sender wallet.
+- **Cold start** (no key yet): the agent sends USDC to the platform wallet and calls `POST /v1/keys/buy` with the transaction hash, the amount and a `senderSignature` from the paying wallet. **No email needed**: the sender wallet from the transaction becomes the key's identity. One key per sender wallet.
 - **Pay per call** (no key at all): `POST /v1/attest`, `/v1/trust` and `/v1/trust/batch` accept x402. See [Other ways to reach the same API](#other-ways-to-reach-the-same-api).
-- **Top-up** (existing key, low credits): the agent sends crypto and calls `POST /v1/credits/buy` with the transaction hash. The key keeps its identity, history, and integrations; credits just increment. Sender must match the wallet registered to the key.
+- **Top-up** (existing key, low credits): the agent sends USDC and calls `POST /v1/credits/buy` with the transaction hash and the amount. The key keeps its identity, history, and integrations; credits just increment. Sender must match the wallet registered to the key; the first top-up on a key with no wallet, or a move to a new wallet with `updateWallet: true`, also takes a `senderSignature` from the paying wallet.
 
 Platform wallets (publicly listed at [insumermodel.com/pricing](https://insumermodel.com/pricing/)):
 
-- **USDC on Ethereum, Base, Polygon, Arbitrum, Optimism or Avalanche**: `0xee432065474D2C852700f74e3fD81e2Bcc16a3D4`
-- **USDT on any of those seven EVM chains, and USDC or USDT on BNB Chain**: `0xAd982CB19aCCa2923Df8F687C0614a7700255a23` (no other EVM chain is a payment chain)
+- **USDC on Ethereum, Optimism, Polygon, Base, Arbitrum or Avalanche**: `0xee432065474D2C852700f74e3fD81e2Bcc16a3D4`
+- **USDC on BNB Chain** (and on the other EVM chains above during the changeover): `0xAd982CB19aCCa2923Df8F687C0614a7700255a23` (no other EVM chain is a payment chain)
 - **USDC on Solana**: `8fyEGM5tRjMocKQWaVXyM2XvvnTxR3sWdrYtug2zeLX4`
-- **USDT on Solana**: `6a1mLjefhvSJX1sEX8PTnionbE9DqoYjU6F6bNkT4Ydr`
-- **Bitcoin**: `bc1qg7qnerdhlmdn899zemtez5tcx2a2snc0dt9dt0` (1 confirmation, market-rate USD conversion)
+- **USDC on Solana during the changeover**: `6a1mLjefhvSJX1sEX8PTnionbE9DqoYjU6F6bNkT4Ydr`
+
+Purchases are paid in USDC only. Bitcoin, Tron and USDT are refused for purchases (Bitcoin and Tron stay chains the API reads).
 
 Volume discounts: $5–$99 → $0.04/call, $100–$499 → $0.03/call (25% off), $500+ → $0.02/call (50% off).
 

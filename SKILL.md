@@ -108,11 +108,12 @@ Every developer who uses this skill needs an API key. There are **four** ways to
 
 **Platform wallets** (publicly listed at [insumermodel.com/pricing](https://insumermodel.com/pricing/)):
 
-- **USDC on Ethereum, Base, Polygon, Arbitrum, Optimism or Avalanche**: `0xee432065474D2C852700f74e3fD81e2Bcc16a3D4`
-- **USDT on any of those seven EVM chains, and USDC or USDT on BNB Chain**: `0xAd982CB19aCCa2923Df8F687C0614a7700255a23` (no other EVM chain is a payment chain)
+- **USDC on Ethereum, Optimism, Polygon, Base, Arbitrum or Avalanche**: `0xee432065474D2C852700f74e3fD81e2Bcc16a3D4`
+- **USDC on BNB Chain** (and on the other EVM chains above during the changeover): `0xAd982CB19aCCa2923Df8F687C0614a7700255a23` (no other EVM chain is a payment chain)
 - **USDC on Solana**: `8fyEGM5tRjMocKQWaVXyM2XvvnTxR3sWdrYtug2zeLX4`
-- **USDT on Solana**: `6a1mLjefhvSJX1sEX8PTnionbE9DqoYjU6F6bNkT4Ydr`
-- **Bitcoin**: `bc1qg7qnerdhlmdn899zemtez5tcx2a2snc0dt9dt0` (1 confirmation, market-rate USD conversion)
+- **USDC on Solana during the changeover**: `6a1mLjefhvSJX1sEX8PTnionbE9DqoYjU6F6bNkT4Ydr`
+
+Purchases are paid in USDC only. Bitcoin, Tron and USDT are refused for purchases (Bitcoin and Tron stay chains the API reads).
 
 **Volume discounts** (Paths 3 and 4): $5–$99 → $0.04/call, $100–$499 → $0.03/call (25% off), $500+ → $0.02/call (50% off).
 
@@ -145,7 +146,7 @@ If a developer wants a Pro or Enterprise tier key from scratch — higher daily 
 
 ### Path 3: Agent first key (crypto, no human, no email)
 
-Agent-friendly bootstrap. The agent sends USDC, USDT, or BTC to the platform wallet (above), then calls `POST /v1/keys/buy` with the transaction hash. **No email or prior authentication needed** — the sender wallet address from the transaction becomes the key's identity.
+Agent-friendly bootstrap. The agent sends USDC on Ethereum, Optimism, BNB Chain, Polygon, Base, Arbitrum, Avalanche or Solana to the platform wallet (above), then calls `POST /v1/keys/buy` with the transaction hash and a signature from the paying wallet. **No email or prior authentication needed**: the sender wallet address from the transaction becomes the key's identity.
 
 ```
 POST https://api.insumermodel.com/v1/keys/buy
@@ -155,11 +156,26 @@ Content-Type: application/json
   "txHash": "0x...",
   "chainId": 8453,
   "amount": 10,
-  "appName": "insumer-skill"
+  "appName": "insumer-skill",
+  "senderSignature": "0x..."
 }
 ```
 
-`amount` is the stablecoin amount sent (min $5). For BTC, amount is optional — USD value is derived from the on-chain BTC amount at market rate. One key per sender wallet (returns 409 if the wallet already has a key — use Path 4 to top up instead).
+`amount` (required) is the USDC amount sent (min 5). `chainId` is `1`, `10`, `56`, `137`, `8453`, `42161`, `43114` or `"solana"`; Bitcoin, Tron and USDT are refused with a `400` that lists the accepted chains. One key per sender wallet (returns 409 if the wallet already has a key: use Path 4 to top up instead).
+
+**Sender signature.** A transaction hash is public, so the wallet that sent the payment signs a fixed text naming it, and the API checks that signature against the sender it read from the chain, never against an address the caller states. Call once without `senderSignature` and the `400` carries the exact text: five lines joined by `\n`, no trailing newline.
+
+```
+api.insumermodel.com
+Confirm the wallet that sent this payment.
+Purpose: key purchase
+Chain: eip155:8453
+Transaction: 0x...
+```
+
+`Purpose` reads `credit purchase` on Path 4. `Chain` is `eip155:<chainId>` or `solana`. `Transaction` is the hash as the API normalizes it (lowercase `0x` hex on EVM), so sign the text the API returns rather than rebuilding it. On an EVM chain, sign with EIP-191 `personal_sign` (smart-contract wallets are checked with ERC-1271); on Solana, with the wallet's `signMessage` (ed25519), sent as base58 or base64.
+
+Errors: `400` signature missing (the message carries the text); `400` not USDC on an accepted chain; `403` the signature does not match the wallet that sent the payment (the message carries the text again); `422` the sender could not be determined; `503` a smart-wallet check could not complete (the payment is not used, so retry).
 
 Always hard-code `appName: "insumer-skill"` for funnel tracking — the agent can rename in the developer portal afterwards.
 
@@ -167,7 +183,7 @@ Always hard-code `appName: "insumer-skill"` for funnel tracking — the agent ca
 
 ### Path 4: Agent top-up on existing key (crypto, no human in the loop)
 
-When an agent running in production burns through its credits, it can refill its own key without human intervention by sending stablecoins or BTC to the platform wallet and calling `POST /v1/credits/buy`:
+When an agent running in production burns through its credits, it can refill its own key without human intervention by sending USDC to the platform wallet and calling `POST /v1/credits/buy`:
 
 ```
 POST https://api.insumermodel.com/v1/credits/buy
@@ -181,7 +197,19 @@ Content-Type: application/json
 }
 ```
 
-Sender verification: the **first** top-up registers the sender wallet to the key. Subsequent top-ups must come from the **same** sender. To replace the registered wallet, include `"updateWallet": true` and send from the new wallet — the verified transfer proves ownership.
+`amount` is required (min 5, in USDC).
+
+Sender verification: the **first** top-up registers the sender wallet to the key, and takes a `senderSignature` from that wallet (the text as in Path 3, with `Purpose: credit purchase`). Later top-ups must come from the **same** sender and need no signature; a different sender gets a `403`. To replace the registered wallet, pay from the new wallet and include `"updateWallet": true` with a `senderSignature` from the new wallet. The signature proves control of the new wallet; a transfer alone does not, because its hash is public.
+
+```
+{
+  "txHash": "0x...",
+  "chainId": 8453,
+  "amount": 10,
+  "updateWallet": true,
+  "senderSignature": "0x..."
+}
+```
 
 **This is the only continuous-identity upgrade path.** The key keeps its history, tier, and integrations — credits just increment. This is the path that makes the "agent pays for its own access" loop real.
 
